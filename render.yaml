@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: convertx-api
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: |
+      npm install
+      mkdir -p bin
+      curl -sL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o bin/yt-dlp
+      chmod +x bin/yt-dlp
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: CORS_ORIGIN
+        value: "*"
+      # Optional: path to a yt-dlp cookies.txt file for authenticated YouTube access
+      # - key: YTDLP_COOKIES_FILE
+      #   sync: false
