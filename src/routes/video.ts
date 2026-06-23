@@ -70,12 +70,14 @@ function loadCookiesFile(): string | null {
 /* ── Bot-bypass yt-dlp args (added to every call) ── */
 function getBotBypassArgs(): string[] {
   const args = [
-    "--no-check-certificate",
+    "--no-check-certificates",
     "--no-warnings",
     "--no-playlist",
     "--force-ipv4",
+    "--cache-dir",
+    "/tmp/yt-dlp-cache",
     "--extractor-args",
-    "youtube:player_client=android",
+    "youtube:player_client=android,web,web_embedded",
   ];
 
   const cookiePath = loadCookiesFile();
