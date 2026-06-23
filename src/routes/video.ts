@@ -12,7 +12,7 @@ const router = Router();
 /* ── yt-dlp binary resolution ── */
 function getYtDlpPath(): string {
   // 1. Env override
-  const envPath = process.env.YTDLP_PATH;
+  const envPath = "/opt/render/project/src/bin/yt-dlp";
   if (envPath && fs.existsSync(envPath)) return envPath;
 
   // 2. Downloaded during Render build (bin/yt-dlp relative to project root)
@@ -31,9 +31,7 @@ function getYtDlpPath(): string {
   try {
     const nixStore = "/nix/store";
     if (fs.existsSync(nixStore)) {
-      const dirs = fs
-        .readdirSync(nixStore)
-        .filter((d) => d.includes("yt-dlp"));
+      const dirs = fs.readdirSync(nixStore).filter((d) => d.includes("yt-dlp"));
       for (const dir of dirs) {
         const bin = path.join(nixStore, dir, "bin", "yt-dlp");
         if (fs.existsSync(bin)) return bin;
@@ -112,13 +110,29 @@ function buildFormatSelector(
 
   if (outputFormat === "mp3") {
     return {
-      args: ["-f", "bestaudio/best", "-x", "--audio-format", "mp3", "--audio-quality", "0"],
+      args: [
+        "-f",
+        "bestaudio/best",
+        "-x",
+        "--audio-format",
+        "mp3",
+        "--audio-quality",
+        "0",
+      ],
       ext: "mp3",
     };
   }
   if (outputFormat === "m4a") {
     return {
-      args: ["-f", "bestaudio/best", "-x", "--audio-format", "m4a", "--audio-quality", "0"],
+      args: [
+        "-f",
+        "bestaudio/best",
+        "-x",
+        "--audio-format",
+        "m4a",
+        "--audio-quality",
+        "0",
+      ],
       ext: "m4a",
     };
   }
@@ -133,7 +147,10 @@ function buildFormatSelector(
     const fmtStr = h
       ? `bestvideo[height<=${h}][ext=webm]+bestaudio[ext=webm]/bestvideo[height<=${h}]+bestaudio/best`
       : "bestvideo[ext=webm]+bestaudio[ext=webm]/bestvideo+bestaudio/best";
-    return { args: ["-f", fmtStr, "--merge-output-format", "webm"], ext: "webm" };
+    return {
+      args: ["-f", fmtStr, "--merge-output-format", "webm"],
+      ext: "webm",
+    };
   }
 
   // default: mp4
@@ -152,42 +169,44 @@ function buildFormatSelector(
 
 /* ── Fetch video metadata via yt-dlp --dump-json ── */
 async function fetchVideoInfo(url: string) {
-  return new Promise<ReturnType<typeof buildVideoInfoResponse>>((resolve, reject) => {
-    let stdout = "";
-    let stderr = "";
+  return new Promise<ReturnType<typeof buildVideoInfoResponse>>(
+    (resolve, reject) => {
+      let stdout = "";
+      let stderr = "";
 
-    const proc = spawn(YT_DLP, [
-      "--dump-json",
-      ...getBotBypassArgs(),
-      url,
-    ]);
+      const proc = spawn(YT_DLP, ["--dump-json", ...getBotBypassArgs(), url]);
 
-    proc.stdout.on("data", (d: Buffer) => { stdout += d.toString(); });
-    proc.stderr.on("data", (d: Buffer) => { stderr += d.toString(); });
+      proc.stdout.on("data", (d: Buffer) => {
+        stdout += d.toString();
+      });
+      proc.stderr.on("data", (d: Buffer) => {
+        stderr += d.toString();
+      });
 
-    proc.on("close", (code) => {
-      if (code !== 0 || !stdout.trim()) {
-        const errMsg = stderr.trim() || "yt-dlp returned no data";
-        return reject(new Error(errMsg));
-      }
-      try {
-        const info = JSON.parse(stdout.trim());
-        resolve(buildVideoInfoResponse(info, url));
-      } catch {
-        reject(new Error("Failed to parse video metadata"));
-      }
-    });
+      proc.on("close", (code) => {
+        if (code !== 0 || !stdout.trim()) {
+          const errMsg = stderr.trim() || "yt-dlp returned no data";
+          return reject(new Error(errMsg));
+        }
+        try {
+          const info = JSON.parse(stdout.trim());
+          resolve(buildVideoInfoResponse(info, url));
+        } catch {
+          reject(new Error("Failed to parse video metadata"));
+        }
+      });
 
-    proc.on("error", (err) => reject(err));
+      proc.on("error", (err) => reject(err));
 
-    // 30 second timeout for metadata
-    const timer = setTimeout(() => {
-      proc.kill();
-      reject(new Error("Metadata fetch timed out after 30 seconds"));
-    }, 30_000);
+      // 30 second timeout for metadata
+      const timer = setTimeout(() => {
+        proc.kill();
+        reject(new Error("Metadata fetch timed out after 30 seconds"));
+      }, 30_000);
 
-    proc.on("close", () => clearTimeout(timer));
-  });
+      proc.on("close", () => clearTimeout(timer));
+    },
+  );
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -219,8 +238,24 @@ function buildVideoInfoResponse(info: any, originalUrl: string) {
 
   if (formats.length === 0) {
     formats.push(
-      { formatId: "mp4-best", quality: "Best", extension: "mp4", filesize: null, vcodec: "h264", acodec: "aac", fps: null },
-      { formatId: "mp3-best", quality: "Best", extension: "mp3", filesize: null, vcodec: null, acodec: "mp3", fps: null },
+      {
+        formatId: "mp4-best",
+        quality: "Best",
+        extension: "mp4",
+        filesize: null,
+        vcodec: "h264",
+        acodec: "aac",
+        fps: null,
+      },
+      {
+        formatId: "mp3-best",
+        quality: "Best",
+        extension: "mp3",
+        filesize: null,
+        vcodec: null,
+        acodec: "mp3",
+        fps: null,
+      },
     );
   }
 
@@ -259,33 +294,48 @@ export function serializeConversion(c: typeof conversionsTable.$inferSelect) {
 router.post("/video/info", async (req, res) => {
   const { url } = req.body ?? {};
   if (!url || typeof url !== "string") {
-    return res.status(400).json({ error: "Invalid request", message: "URL is required" });
+    return res
+      .status(400)
+      .json({ error: "Invalid request", message: "URL is required" });
   }
   if (!isValidUrl(url)) {
-    return res.status(400).json({ error: "Invalid URL", message: "Please provide a valid HTTP/HTTPS URL" });
+    return res.status(400).json({
+      error: "Invalid URL",
+      message: "Please provide a valid HTTP/HTTPS URL",
+    });
   }
 
   try {
     const videoInfo = await fetchVideoInfo(url);
     return res.json(videoInfo);
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Failed to fetch video info";
+    const msg =
+      err instanceof Error ? err.message : "Failed to fetch video info";
     console.error(`[video/info] ${msg}`);
-    return res.status(422).json({ error: "Could not fetch video", message: msg });
+    return res
+      .status(422)
+      .json({ error: "Could not fetch video", message: msg });
   }
 });
 
 /* ── POST /api/video/convert ── */
 router.post("/video/convert", async (req, res) => {
-  const { url, outputFormat, quality, videoTitle, videoThumbnail } = req.body ?? {};
+  const { url, outputFormat, quality, videoTitle, videoThumbnail } =
+    req.body ?? {};
   if (!url || !outputFormat) {
-    return res.status(400).json({ error: "Invalid request", message: "URL and output format are required" });
+    return res.status(400).json({
+      error: "Invalid request",
+      message: "URL and output format are required",
+    });
   }
   if (!isValidUrl(url)) {
     return res.status(400).json({ error: "Invalid URL" });
   }
 
-  const ip = (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0] ?? req.ip ?? "unknown";
+  const ip =
+    (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0] ??
+    req.ip ??
+    "unknown";
 
   const [conversion] = await db
     .insert(conversionsTable)
@@ -354,7 +404,9 @@ async function runConversion(
         }
       });
 
-      proc.stderr.on("data", (d: Buffer) => { stderr += d.toString(); });
+      proc.stderr.on("data", (d: Buffer) => {
+        stderr += d.toString();
+      });
 
       proc.on("close", async (code) => {
         if (code !== 0) {
@@ -363,12 +415,15 @@ async function runConversion(
 
         // Find the output file
         const prefix = `${id}.`;
-        const files = fs.readdirSync(DOWNLOADS_DIR).filter((f) => f.startsWith(prefix));
+        const files = fs
+          .readdirSync(DOWNLOADS_DIR)
+          .filter((f) => f.startsWith(prefix));
         if (files.length === 0) {
           return reject(new Error("Output file not found after conversion"));
         }
 
-        const preferredFile = files.find((f) => f.endsWith(`.${ext}`)) ?? files[0];
+        const preferredFile =
+          files.find((f) => f.endsWith(`.${ext}`)) ?? files[0];
         const filePath = path.join(DOWNLOADS_DIR, preferredFile);
         const stat = fs.statSync(filePath);
 
