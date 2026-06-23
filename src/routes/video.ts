@@ -52,21 +52,35 @@ if (!fs.existsSync(DOWNLOADS_DIR)) {
   fs.mkdirSync(DOWNLOADS_DIR, { recursive: true });
 }
 
+function loadCookiesFile(): string | null {
+  try {
+    const raw = process.env.YTDLP_COOKIES_FILE;
+    if (!raw) return null;
+
+    const filePath = "/tmp/cookies.txt";
+    fs.writeFileSync(filePath, Buffer.from(raw, "base64").toString("utf8"));
+
+    return filePath;
+  } catch (e) {
+    console.error("cookie load failed", e);
+    return null;
+  }
+}
+
 /* ── Bot-bypass yt-dlp args (added to every call) ── */
 function getBotBypassArgs(): string[] {
   const args = [
-    // Use the Android + web client — avoids "Sign in to confirm you're not a bot"
-    "--extractor-args",
-    "youtube:player_client=android,web",
     "--no-check-certificate",
     "--no-warnings",
     "--no-playlist",
+    "--force-ipv4",
+    "--extractor-args",
+    "youtube:player_client=android",
   ];
 
-  // If a cookies file is configured, use it (best long-term solution)
-  const cookiesFile = process.env.YTDLP_COOKIES_FILE;
-  if (cookiesFile && fs.existsSync(cookiesFile)) {
-    args.push("--cookies", cookiesFile);
+  const cookiePath = loadCookiesFile();
+  if (cookiePath) {
+    args.push("--cookies", cookiePath);
   }
 
   return args;
