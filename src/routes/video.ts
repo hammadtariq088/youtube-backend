@@ -21,14 +21,18 @@ if (!fs.existsSync(DOWNLOADS_DIR)) {
 }
 
 const YT_DLP = resolveYtDlp();
+console.log("YT-DLP:", YT_DLP);
 
 /* ─────────────────────────────
    YT-DLP RESOLUTION
 ───────────────────────────── */
 
 function resolveYtDlp(): string {
-  const envPath = process.env.YTDLP_PATH;
-  if (envPath && fs.existsSync(envPath)) return envPath;
+  const renderPath = "/opt/render/project/src/bin/yt-dlp";
+
+  if (fs.existsSync(renderPath)) {
+    return renderPath;
+  }
 
   try {
     return execFileSync("which", ["yt-dlp"], {
@@ -43,95 +47,26 @@ function resolveYtDlp(): string {
    PIPED API (INFO ONLY)
 ───────────────────────────── */
 
-const INVIDIOUS_INSTANCES = [
-  "https://inv.nadeko.net",
-  "https://invidious.nerdvpn.de",
-  "https://vid.puffyan.us",
-  "https://yewtu.be",
-];
-
-function extractVideoId(url: string): string | null {
-  try {
-    const u = new URL(url);
-
-    if (u.hostname.includes("youtu.be")) {
-      return u.pathname.slice(1);
-    }
-
-    return u.searchParams.get("v");
-  } catch {
-    return null;
-  }
-}
-
-async function fetchFromInvidious(videoId: string) {
-  for (const instance of INVIDIOUS_INSTANCES) {
-    try {
-      console.log(`Trying ${instance}`);
-
-      const response = await fetch(`${instance}/api/v1/videos/${videoId}`, {
-        headers: {
-          "User-Agent": "Mozilla/5.0",
-          Accept: "application/json",
-        },
-      });
-
-      console.log(`${instance} -> ${response.status}`);
-
-      if (!response.ok) {
-        continue;
-      }
-
-      const contentType = response.headers.get("content-type") ?? "";
-
-      if (!contentType.includes("application/json")) {
-        console.log(`${instance} returned non-json response`);
-        continue;
-      }
-
-      const data = await response.json();
-
-      if (data?.title) {
-        return data;
-      }
-    } catch (err) {
-      console.error(instance, err);
-    }
-  }
-
-  throw new Error("All Invidious instances failed");
-}
-
 async function fetchVideoInfo(url: string) {
-  const videoId = extractVideoId(url);
+  const response = await fetch(
+    `https://noembed.com/embed?url=${encodeURIComponent(url)}`,
+  );
 
-  if (!videoId) {
-    throw new Error("Invalid YouTube URL");
+  if (!response.ok) {
+    throw new Error("Failed to fetch metadata");
   }
 
-  const info = await fetchFromInvidious(videoId);
+  const data: any = await response.json();
 
   return {
-    title: info.title ?? "Unknown Title",
-
-    description: info.description ?? "",
-
-    thumbnail:
-      info.videoThumbnails?.find((t: any) => t.quality === "maxresdefault")
-        ?.url ??
-      info.videoThumbnails?.[0]?.url ??
-      `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-
-    duration: Number(info.lengthSeconds ?? 0),
-
-    uploader: info.author ?? "",
-
-    viewCount: Number(info.viewCount ?? 0),
-
+    title: data.title ?? "Unknown Video",
+    description: "",
+    thumbnail: data.thumbnail_url ?? "",
+    duration: 0,
+    uploader: data.author_name ?? "",
+    viewCount: 0,
     platform: "YouTube",
-
     url,
-
     formats: [
       {
         formatId: "mp4",
@@ -207,12 +142,18 @@ function buildFormatSelector(format: string, quality: string | null) {
 
 function getYtDlpArgs() {
   return [
-    "--no-check-certificates",
-    "--no-warnings",
-    "--no-playlist",
     "--force-ipv4",
+    "--no-playlist",
+    "--no-warnings",
+
     "--extractor-args",
-    "youtube:player_client=android",
+    "youtube:player_client=android,web",
+
+    "--extractor-retries",
+    "5",
+
+    "--socket-timeout",
+    "30",
   ];
 }
 
