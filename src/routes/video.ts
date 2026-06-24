@@ -5,6 +5,7 @@ import { spawn, execFileSync } from "child_process";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { serializeConversion } from "../utils/serializeConversion.js";
 
 const router = Router();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -42,11 +43,11 @@ function resolveYtDlp(): string {
    PIPED API (INFO ONLY)
 ───────────────────────────── */
 
-const PIPED_INSTANCES = [
-  "https://piped.adminforge.de",
-  "https://piped.privacydev.net",
-  "https://piped.projectsegfau.lt",
-  "https://piped.video",
+const INVIDIOUS_INSTANCES = [
+  "https://inv.nadeko.net",
+  "https://invidious.nerdvpn.de",
+  "https://vid.puffyan.us",
+  "https://yewtu.be",
 ];
 
 function extractVideoId(url: string): string | null {
@@ -63,49 +64,74 @@ function extractVideoId(url: string): string | null {
   }
 }
 
-async function fetchFromPiped(videoId: string) {
-  for (const instance of PIPED_INSTANCES) {
+async function fetchFromInvidious(videoId: string) {
+  for (const instance of INVIDIOUS_INSTANCES) {
     try {
       console.log(`Trying ${instance}`);
 
-      const res = await fetch(`${instance}/api/v1/streams/${videoId}`, {
+      const response = await fetch(`${instance}/api/v1/videos/${videoId}`, {
         headers: {
           "User-Agent": "Mozilla/5.0",
+          Accept: "application/json",
         },
       });
 
-      console.log(instance, res.status);
+      console.log(`${instance} -> ${response.status}`);
 
-      if (res.ok) {
-        return await res.json();
+      if (!response.ok) {
+        continue;
       }
 
-      const text = await res.text();
-      console.log(text);
+      const contentType = response.headers.get("content-type") ?? "";
+
+      if (!contentType.includes("application/json")) {
+        console.log(`${instance} returned non-json response`);
+        continue;
+      }
+
+      const data = await response.json();
+
+      if (data?.title) {
+        return data;
+      }
     } catch (err) {
       console.error(instance, err);
     }
   }
 
-  throw new Error("Piped API failed on all instances");
+  throw new Error("All Invidious instances failed");
 }
 
 async function fetchVideoInfo(url: string) {
   const videoId = extractVideoId(url);
-  if (!videoId) throw new Error("Invalid YouTube URL");
 
-  const info = await fetchFromPiped(videoId);
+  if (!videoId) {
+    throw new Error("Invalid YouTube URL");
+  }
+
+  const info = await fetchFromInvidious(videoId);
 
   return {
-    title: info.title,
+    title: info.title ?? "Unknown Title",
+
     description: info.description ?? "",
+
     thumbnail:
-      info.thumbnailUrl ?? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-    duration: info.duration ?? 0,
-    uploader: info.uploader ?? "",
-    viewCount: info.views ?? 0,
+      info.videoThumbnails?.find((t: any) => t.quality === "maxresdefault")
+        ?.url ??
+      info.videoThumbnails?.[0]?.url ??
+      `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+
+    duration: Number(info.lengthSeconds ?? 0),
+
+    uploader: info.author ?? "",
+
+    viewCount: Number(info.viewCount ?? 0),
+
     platform: "YouTube",
+
     url,
+
     formats: [
       {
         formatId: "mp4",
@@ -243,7 +269,7 @@ router.post("/video/convert", async (req, res) => {
 
   runConversion(conversion.id, url, outputFormat, quality ?? null);
 
-  return res.json(conversion);
+  return res.json(serializeConversion(conversion));
 });
 
 /* ─────────────────────────────
@@ -266,7 +292,14 @@ async function runConversion(
 
     const output = path.join(DOWNLOADS_DIR, `${id}.%(ext)s`);
 
-    const args = [...fmtArgs, ...getYtDlpArgs(), "-o", output, url];
+    const args = [
+      ...fmtArgs,
+      ...getYtDlpArgs(),
+      "--newline",
+      "-o",
+      output,
+      url,
+    ];
 
     await new Promise<void>((resolve, reject) => {
       const proc = spawn(YT_DLP, args);
