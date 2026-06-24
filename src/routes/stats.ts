@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db, conversionsTable } from "../lib/db.js";
 import { eq, gte, desc, count, sql } from "drizzle-orm";
-import { serializeConversion } from "./video.js";
+import { serializeConversion } from "../utils/serializeConversion.js";
 
 const router = Router();
 
@@ -10,7 +10,9 @@ router.get("/stats/summary", async (_req, res) => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const [totalCount] = await db.select({ count: count() }).from(conversionsTable);
+  const [totalCount] = await db
+    .select({ count: count() })
+    .from(conversionsTable);
   const [todayCount] = await db
     .select({ count: count() })
     .from(conversionsTable)
@@ -69,7 +71,9 @@ router.get("/admin/analytics", async (req, res) => {
     .from(conversionsTable)
     .groupBy(conversionsTable.outputFormat);
 
-  const [totalCount] = await db.select({ count: count() }).from(conversionsTable);
+  const [totalCount] = await db
+    .select({ count: count() })
+    .from(conversionsTable);
   const [completedCount] = await db
     .select({ count: count() })
     .from(conversionsTable)
@@ -114,7 +118,10 @@ router.get("/admin/conversions", async (req, res) => {
     db.select({ total: count() }).from(conversionsTable).where(whereClause),
   ]);
 
-  return res.json({ items: items.map(serializeConversion), total: Number(total) });
+  return res.json({
+    items: items.map(serializeConversion),
+    total: Number(total),
+  });
 });
 
 export default router;
