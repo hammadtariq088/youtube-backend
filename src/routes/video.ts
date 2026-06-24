@@ -15,6 +15,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 ───────────────────────────── */
 
 const DOWNLOADS_DIR = process.env.DOWNLOADS_DIR ?? "/tmp/convertx-downloads";
+const baseUrl =
+  process.env.PUBLIC_API_URL || "https://youtube-backend-4zfp.onrender.com/";
 
 if (!fs.existsSync(DOWNLOADS_DIR)) {
   fs.mkdirSync(DOWNLOADS_DIR, { recursive: true });
@@ -296,7 +298,7 @@ async function runConversion(
             progress: 100,
             filePath,
             fileSize: stat.size,
-            downloadUrl: `/api/downloads/${id}`,
+            downloadUrl: `${baseUrl}/api/downloads/${id}`,
             completedAt: new Date(),
           })
           .where(eq(conversionsTable.id, id));
@@ -316,5 +318,28 @@ async function runConversion(
       .where(eq(conversionsTable.id, id));
   }
 }
+
+router.get("/video/conversion/:id", async (req, res) => {
+  const id = Number(req.params.id);
+
+  if (Number.isNaN(id)) {
+    return res.status(400).json({
+      error: "Invalid conversion id",
+    });
+  }
+
+  const [conversion] = await db
+    .select()
+    .from(conversionsTable)
+    .where(eq(conversionsTable.id, id));
+
+  if (!conversion) {
+    return res.status(404).json({
+      error: "Conversion not found",
+    });
+  }
+
+  return res.json(serializeConversion(conversion));
+});
 
 export default router;
