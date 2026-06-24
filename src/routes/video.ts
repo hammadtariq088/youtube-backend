@@ -144,18 +144,16 @@ function buildFormatSelector(format: string, quality: string | null) {
 
 function getYtDlpArgs() {
   return [
-    "--force-ipv4",
-    "--no-playlist",
+    "--cookies",
+    "./cookies.txt",
+
+    "--no-check-certificates",
     "--no-warnings",
+    "--no-playlist",
+    "--force-ipv4",
 
     "--extractor-args",
-    "youtube:player_client=android,web",
-
-    "--extractor-retries",
-    "5",
-
-    "--socket-timeout",
-    "30",
+    "youtube:player_client=android",
   ];
 }
 
