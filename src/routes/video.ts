@@ -42,7 +42,12 @@ function resolveYtDlp(): string {
    PIPED API (INFO ONLY)
 ───────────────────────────── */
 
-const PIPED_INSTANCES = ["https://piped.video", "https://piped.adminforge.de"];
+const PIPED_INSTANCES = [
+  "https://piped.adminforge.de",
+  "https://piped.privacydev.net",
+  "https://piped.projectsegfau.lt",
+  "https://piped.video",
+];
 
 function extractVideoId(url: string): string | null {
   try {
@@ -61,14 +66,25 @@ function extractVideoId(url: string): string | null {
 async function fetchFromPiped(videoId: string) {
   for (const instance of PIPED_INSTANCES) {
     try {
+      console.log(`Trying ${instance}`);
+
       const res = await fetch(`${instance}/api/v1/streams/${videoId}`, {
         headers: {
           "User-Agent": "Mozilla/5.0",
         },
       });
 
-      if (res.ok) return await res.json();
-    } catch {}
+      console.log(instance, res.status);
+
+      if (res.ok) {
+        return await res.json();
+      }
+
+      const text = await res.text();
+      console.log(text);
+    } catch (err) {
+      console.error(instance, err);
+    }
   }
 
   throw new Error("Piped API failed on all instances");
