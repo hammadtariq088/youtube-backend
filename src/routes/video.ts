@@ -37,6 +37,11 @@ function resolveYtDlp(): string {
   }
 
   try {
+    console.log(
+      execFileSync(YT_DLP, ["--version"], {
+        encoding: "utf8",
+      }),
+    );
     return execFileSync("which", ["yt-dlp"], {
       encoding: "utf8",
     }).trim();
@@ -148,12 +153,13 @@ function getYtDlpArgs() {
     "./cookies.txt",
 
     "--no-check-certificates",
-    "--no-warnings",
     "--no-playlist",
-    "--force-ipv4",
 
     "--extractor-args",
-    "youtube:player_client=android",
+    "youtube:player_client=web,android,tv",
+
+    "--user-agent",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
   ];
 }
 
@@ -270,7 +276,11 @@ async function runConversion(
       });
 
       proc.stderr.on("data", (d) => {
-        stderr += d.toString();
+        const txt = d.toString();
+
+        console.log(txt);
+
+        stderr += txt;
       });
 
       proc.on("close", async (code) => {
